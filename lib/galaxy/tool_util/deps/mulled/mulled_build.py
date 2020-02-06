@@ -128,8 +128,8 @@ def get_affected_packages(args):
     recipes_dir = args.recipes_dir
     hours = args.diff_hours
     cmd = ['git', 'log', '--diff-filter=ACMRTUXB', '--name-only', '--pretty=""', '--since="%s hours ago"' % hours]
-    changed_files = subprocess.check_output(cmd, cwd=recipes_dir).strip().split('\n')
-    pkg_list = set([x for x in changed_files if x.startswith('recipes/') and x.endswith('meta.yaml')])
+    changed_files = unicodify(subprocess.check_output(cmd, cwd=recipes_dir)).splitlines()
+    pkg_list = {x for x in changed_files if x.startswith('recipes/') and x.endswith('meta.yaml')}
     for pkg in pkg_list:
         if pkg and os.path.exists(os.path.join(recipes_dir, pkg)):
             yield (get_pkg_name(args, pkg), get_tests(args, pkg))
@@ -403,7 +403,9 @@ def target_str_to_targets(targets_raw):
         if "=" in target_str:
             package_name, version = target_str.split("=", 1)
             build = None
-            if "--" in version:
+            if "=" in version:
+                version, build = version.split('=')
+            elif "--" in version:
                 version, build = version.split('--')
             target = build_target(package_name, version, build)
         else:
