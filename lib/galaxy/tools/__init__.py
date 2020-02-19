@@ -127,13 +127,9 @@ GALAXY_LIB_TOOLS_UNVERSIONED = [
     "send_to_cloud",
     "__DATA_FETCH__",
     # Legacy tools bundled with Galaxy.
-    "vcf_to_maf_customtrack1",
     "laj_1",
-    "secure_hash_message_digest",
-    "join1",
     "gff2bed1",
     "gff_filter_by_feature_count",
-    "aggregate_scores_in_intervals2",
     "Interval_Maf_Merged_Fasta2",
     "GeneBed_Maf_Fasta2",
     "maf_stats1",
@@ -146,16 +142,12 @@ GALAXY_LIB_TOOLS_UNVERSIONED = [
     "MAF_split_blocks_by_species1",
     "MAF_Limit_To_Species1",
     "maf_by_block_number1",
-    "wiggle2simple1",
     # Converters
     "CONVERTER_bed_to_fli_0",
-    "CONVERTER_fastq_to_fqtoc0",
     "CONVERTER_gff_to_fli_0",
     "CONVERTER_gff_to_interval_index_0",
     "CONVERTER_maf_to_fasta_0",
     "CONVERTER_maf_to_interval_0",
-    "CONVERTER_wiggle_to_interval_0",
-    "CONVERTER_tar_to_directory",
     # Tools improperly migrated to the tool shed (devteam)
     "qualityFilter",
     "winSplitter",
@@ -165,11 +157,8 @@ GALAXY_LIB_TOOLS_UNVERSIONED = [
     "lastz_paired_reads_wrapper",
     "subRate1",
     "substitutions1",
-    "sam_pileup",
     "find_diag_hits",
     "cufflinks",
-    # Tools improperly migrated to the tool shed (iuc)
-    "tabular_to_dbnsfp",
     # Tools improperly migrated using Galaxy (from shed other)
     "column_join",
     "gd_coverage_distributions",  # Genome Diversity tools from miller-lab
@@ -178,8 +167,6 @@ GALAXY_LIB_TOOLS_UNVERSIONED = [
     "gd_phylogenetic_tree",
     "gd_population_structure",
     "gd_prepare_population_structure",
-    # Datasources
-    "genomespace_importer"
 ]
 # Tools that needed galaxy on the PATH in the past but no longer do along
 # with the version at which they were fixed.
@@ -191,6 +178,16 @@ GALAXY_LIB_TOOLS_VERSIONED = {
     "lastz_wrapper_2": packaging.version.parse("1.3"),
     "PEsortedSAM2readprofile": packaging.version.parse("1.1.1"),
     "sam_to_bam": packaging.version.parse("1.1.3"),
+    "sam_pileup": packaging.version.parse("1.1.3"),
+    "vcf_to_maf_customtrack1": packaging.version.parse("1.0.1"),
+    "secure_hash_message_digest": packaging.version.parse("0.0.2"),
+    "join1": packaging.version.parse("2.1.3"),
+    "wiggle2simple1": packaging.version.parse("1.0.1"),
+    "CONVERTER_wiggle_to_interval_0": packaging.version.parse("1.0.1"),
+    "aggregate_scores_in_intervals2": packaging.version.parse("1.1.4"),
+    "CONVERTER_fastq_to_fqtoc0": packaging.version.parse("1.0.1"),
+    "CONVERTER_tar_to_directory": packaging.version.parse("1.0.1"),
+    "tabular_to_dbnsfp": packaging.version.parse("1.0.1"),
 }
 
 
@@ -257,6 +254,19 @@ class ToolBox(BaseGalaxyToolBox):
             tool_root_dir=tool_root_dir,
             app=app,
         )
+
+    def can_load_config_file(self, config_filename):
+        if config_filename == self.app.config.shed_tool_config_file and not self.app.config.shed_tool_config_file_set:
+            if self.dynamic_confs():
+                # Do not load or create a default shed_tool_config_file if another shed_tool_config file has already been loaded
+                return False
+        elif self.app.config.tool_config_file_set:
+            log.warning(
+                "The default shed tool config file (%s) has been added to the tool_config_file option, if this is "
+                "not the desired behavior, please set shed_tool_config_file to your primary shed-enabled tool "
+                "config file", self.app.config.shed_tool_config_file
+            )
+        return True
 
     def has_reloaded(self, other_toolbox):
         return self._reload_count != other_toolbox._reload_count
@@ -525,6 +535,10 @@ class Tool(Dictifiable):
     def is_latest_version(self):
         tool_versions = self.tool_versions
         return not tool_versions or self.version == self.tool_versions[-1]
+
+    @property
+    def is_datatype_converter(self):
+        return self in self.app.datatypes_registry.converter_tools
 
     @property
     def tool_shed_repository(self):
@@ -2437,9 +2451,16 @@ class SetMetadataTool(Tool):
         for name, dataset in inp_data.items():
             external_metadata = get_metadata_compute_strategy(app.config, job.id)
             sa_session = app.model.context
-            if external_metadata.external_metadata_set_successfully(dataset, name, sa_session, working_directory=working_directory):
-                external_metadata.load_metadata(dataset, name, sa_session, working_directory=working_directory)
-            else:
+            metadata_set_successfully = external_metadata.external_metadata_set_successfully(dataset, name, sa_session, working_directory=working_directory)
+            if metadata_set_successfully:
+                try:
+                    # external_metadata_set_successfully is only an approximation (the metadata json file exists),
+                    # things can still go wrong, but we don't want to fail here since it can lead to a resubmission loop
+                    external_metadata.load_metadata(dataset, name, sa_session, working_directory=working_directory)
+                except Exception:
+                    metadata_set_successfully = False
+                    log.exception("Exception occured while loading metadata results")
+            if not metadata_set_successfully:
                 dataset._state = model.Dataset.states.FAILED_METADATA
                 self.sa_session.add(dataset)
                 self.sa_session.flush()
@@ -2454,7 +2475,12 @@ class SetMetadataTool(Tool):
                 # Revert dataset.state to fall back to dataset.dataset.state
                 dataset._state = None
             # Need to reset the peek, which may rely on metadata
-            dataset.set_peek()
+            # TODO: move this into metadata setting, setting the peek requires dataset access,
+            # and large chunks of the dataset may be read here.
+            try:
+                dataset.set_peek()
+            except Exception:
+                log.exception()
             self.sa_session.add(dataset)
             self.sa_session.flush()
 

@@ -45,7 +45,7 @@ def src_split(src):
 def src_merge(spec, chrom, contig=None):
     if None in [spec, chrom]:
         spec = chrom = spec or chrom
-    return bx.align.maf.src_merge(spec, chrom, contig)
+    return bx.align.src_merge(spec, chrom, contig)
 
 
 def get_species_in_block(block):
@@ -58,8 +58,7 @@ def get_species_in_block(block):
 
 
 def tool_fail(msg="Unknown Error"):
-    print("Fatal Error: %s" % msg, file=sys.stderr)
-    sys.exit()
+    sys.exit("Fatal Error: %s" % msg)
 
 
 class TempFileHandler(object):
@@ -103,11 +102,11 @@ class TempFileHandler(object):
                         else:
                             raise e
                 tmp_file.close()
-                self.files.append(open(filename, 'w+b'))
+                self.files.append(open(filename, 'w'))
             else:
                 while True:
                     try:
-                        self.files[index] = open(self.files[index].name, 'r+b')
+                        self.files[index] = open(self.files[index].name, 'r')
                         break
                     except OSError as e:
                         if self.open_file_indexes and e.errno == EMFILE:

@@ -780,6 +780,17 @@
 :Type: str
 
 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``build_sites_config_file``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:Description:
+    File that defines the builds (dbkeys) available at sites used by
+    display applications and the URL to those sites.
+:Default: ``config/build_sites.yml.sample``
+:Type: str
+
+
 ~~~~~~~~~~~~~~~~~~~~
 ``builds_file_path``
 ~~~~~~~~~~~~~~~~~~~~
@@ -1570,17 +1581,6 @@
 :Description:
     The URL linked by the "Videos" link in the "Help" menu.
 :Default: ``https://vimeo.com/galaxyproject``
-:Type: str
-
-
-~~~~~~~~~~~~~~~~~~~~~~
-``genomespace_ui_url``
-~~~~~~~~~~~~~~~~~~~~~~
-
-:Description:
-    Points to the GenomeSpace UI service which will be used by the
-    GenomeSpace importer and exporter tools
-:Default: ``https://gsui.genomespace.org/jsui/``
 :Type: str
 
 
