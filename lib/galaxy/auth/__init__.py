@@ -123,6 +123,15 @@ class AuthManager(object):
             log.exception("Active Authenticators Failure")
             raise
 
+    @property
+    def has_single_idp(self):
+        """
+        Returns true if there's only one IDP configured.
+        :return: True if only one IDP
+        """
+        app = self.__app
+        return app.config.enable_oidc and len(app.config.oidc) == 1 and len(self.authenticators) == 0
+
 
 def _get_allow_register(d):
     s = d.get('allow-register', True)
